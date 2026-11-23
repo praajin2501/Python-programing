@@ -1,1 +1,492 @@
+import sqlite3
+import time
+import re
+import random
+from collections import Counter
 
+
+# =====================================================
+# B4: FINAL ENGINEERING DECISION
+# SENTIMENT ANALYSIS, SUMMARISATION AND DATABASE INDEXING
+# =====================================================
+
+POSITIVE = {"good", "clean", "fast", "helpful", "improved"}
+NEGATIVE = {"bad", "dirty", "slow", "rude", "smoke", "broken"}
+NEGATORS = {"not", "never", "no"}
+
+STOP_WORDS = {
+    "the", "is", "are", "was", "were", "a", "an", "and",
+    "to", "of", "in", "from", "it", "this", "that",
+    "at", "on", "for", "with", "but", "very", "my",
+    "our", "we", "they", "i", "have", "has", "had"
+}
+
+
+# =====================================================
+# B4.1: SENTIMENT SCORER
+# =====================================================
+
+def score(text):
+    words = re.findall(r"[a-z]+", text.lower())
+    total = 0
+
+    for i, word in enumerate(words):
+
+        value = 0
+
+        if word in POSITIVE:
+            value = 1
+
+        elif word in NEGATIVE:
+            value = -1
+
+        # A preceding negator reverses the sentiment
+        if i > 0 and words[i - 1] in NEGATORS:
+            value = -value
+
+        total += value
+
+    return total
+
+
+def label(text):
+
+    sentiment = score(text)
+
+    if sentiment > 0:
+        return "positive"
+
+    elif sentiment < 0:
+        return "negative"
+
+    else:
+        return "neutral"
+
+
+# =====================================================
+# SUMMARISER: SELECT SENTENCES USING WORD FREQUENCY
+# =====================================================
+
+def summarise(text, k=2):
+
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    sentences = [s for s in sentences if s]
+
+    if len(sentences) <= k:
+        return " ".join(sentences)
+
+    words = re.findall(r"[a-z]+", text.lower())
+
+    important_words = [
+        word for word in words
+        if word not in STOP_WORDS and len(word) > 2
+    ]
+
+    word_frequency = Counter(important_words)
+
+    sentence_scores = []
+
+    for index, sentence in enumerate(sentences):
+
+        sentence_words = re.findall(r"[a-z]+", sentence.lower())
+
+        sentence_score = sum(
+            word_frequency[word]
+            for word in sentence_words
+            if word not in STOP_WORDS
+        )
+
+        sentence_scores.append((sentence_score, index, sentence))
+
+    selected = sorted(
+        sentence_scores,
+        key=lambda item: item[0],
+        reverse=True
+    )[:k]
+
+    # Preserve the original sentence order
+    selected.sort(key=lambda item: item[1])
+
+    return " ".join(item[2] for item in selected)
+
+
+# =====================================================
+# ALTERNATIVE SUMMARISER: FIRST K SENTENCES
+# =====================================================
+
+def first_k_summary(text, k=2):
+
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+
+    return " ".join(sentences[:k])
+
+
+# =====================================================
+# 50 COMPLAINTS WITH MANUAL SENTIMENT LABELS
+# =====================================================
+
+complaints = [
+    ("The roads are clean and the buses are fast.", "positive"),
+    ("Smoke from the factory makes the air bad.", "negative"),
+    ("The staff were not helpful.", "negative"),
+    ("Not bad, the service improved.", "positive"),
+    ("The bus service is slow today.", "negative"),
+    ("The station is clean and helpful staff are available.", "positive"),
+    ("The road is dirty and the area has smoke.", "negative"),
+    ("The workers were rude and the service was bad.", "negative"),
+    ("The transport service is good and fast.", "positive"),
+    ("The bus is broken and the waiting time is slow.", "negative"),
+    ("The air is clean near the station.", "positive"),
+    ("The staff are helpful and the service is good.", "positive"),
+    ("The road is not clean.", "negative"),
+    ("The bus is not slow today.", "positive"),
+    ("The factory produces smoke near homes.", "negative"),
+    ("The service improved and the staff are helpful.", "positive"),
+    ("The road is dirty and the bus is broken.", "negative"),
+    ("The staff are not rude and are helpful.", "positive"),
+    ("The bus arrived on time.", "neutral"),
+    ("There is no clean water near the station.", "negative"),
+    ("The transport service is fast and good.", "positive"),
+    ("The air quality is bad because of smoke.", "negative"),
+    ("The staff were helpful yesterday.", "positive"),
+    ("The bus was not broken.", "positive"),
+    ("The road condition is very bad.", "negative"),
+    ("The station is clean but the bus is slow.", "negative"),
+    ("The staff are rude and not helpful.", "negative"),
+    ("The service has improved this month.", "positive"),
+    ("The factory smoke makes the surroundings dirty.", "negative"),
+    ("The bus service is good today.", "positive"),
+    ("The road is clean and the station is good.", "positive"),
+    ("The service is not good.", "negative"),
+    ("The bus is fast but the staff are rude.", "negative"),
+    ("The station is not dirty.", "positive"),
+    ("The air is bad near the factory.", "negative"),
+    ("The staff are helpful and polite.", "positive"),
+    ("The bus is broken and the service is bad.", "negative"),
+    ("The road is clean after maintenance.", "positive"),
+    ("The service is slow and the staff are rude.", "negative"),
+    ("The station is good and clean.", "positive"),
+    ("The factory smoke is affecting nearby houses.", "negative"),
+    ("The staff were never helpful.", "negative"),
+    ("The bus service improved and is fast.", "positive"),
+    ("The road is not dirty.", "positive"),
+    ("The transport service is broken.", "negative"),
+    ("The station staff are helpful.", "positive"),
+    ("The bus is not good.", "negative"),
+    ("The road is clean but the air is bad.", "negative"),
+    ("The service is good and improved.", "positive"),
+    ("The bus arrived at the station.", "neutral")
+]
+
+
+# =====================================================
+# TEST SENTIMENT AND COMPARE WITH MANUAL LABELS
+# =====================================================
+
+def test_sentiment():
+
+    agreement = 0
+
+    print("\nSENTIMENT ANALYSIS RESULTS")
+    print("=" * 75)
+
+    for index, (complaint, actual_label) in enumerate(complaints, 1):
+
+        predicted_label = label(complaint)
+
+        if predicted_label == actual_label:
+            agreement += 1
+
+        print(
+            f"{index:02}. Predicted: {predicted_label:8} "
+            f"| Manual: {actual_label:8} | {complaint}"
+        )
+
+    accuracy = (agreement / len(complaints)) * 100
+
+    print("\nTotal Complaints:", len(complaints))
+    print("Correct Labels:", agreement)
+    print("Incorrect Labels:", len(complaints) - agreement)
+    print("Agreement:", round(accuracy, 2), "%")
+
+    return agreement
+
+
+# =====================================================
+# COMPARE THE TWO SUMMARISERS
+# =====================================================
+
+def test_summariser():
+
+    print("\nSUMMARISER COMPARISON")
+    print("=" * 75)
+
+    frequency_better = 0
+    first_k_better = 0
+    equal = 0
+
+    for index, (complaint, manual_label) in enumerate(complaints, 1):
+
+        frequency_summary = summarise(complaint, 2)
+        first_summary = first_k_summary(complaint, 2)
+
+        # Compare whether the summaries retain the complaint's
+        # important sentiment words.
+        important_words = POSITIVE | NEGATIVE
+
+        frequency_count = sum(
+            word in important_words
+            for word in re.findall(r"[a-z]+", frequency_summary.lower())
+        )
+
+        first_count = sum(
+            word in important_words
+            for word in re.findall(r"[a-z]+", first_summary.lower())
+        )
+
+        if frequency_count > first_count:
+            frequency_better += 1
+
+        elif first_count > frequency_count:
+            first_k_better += 1
+
+        else:
+            equal += 1
+
+        print(f"\nComplaint {index}: {complaint}")
+        print("Frequency Summary:", frequency_summary)
+        print("First-K Summary:", first_summary)
+
+    print("\nSUMMARY COMPARISON")
+    print("Frequency-based summary better:", frequency_better)
+    print("First-K summary better:", first_k_better)
+    print("Equal results:", equal)
+
+
+# =====================================================
+# FIND A WRONG SENTIMENT CLASSIFICATION
+# =====================================================
+
+def find_wrong_classification():
+
+    print("\nWRONG CLASSIFICATION EXAMPLE")
+    print("=" * 55)
+
+    for complaint, actual_label in complaints:
+
+        predicted = label(complaint)
+
+        if predicted != actual_label:
+
+            print("Complaint:", complaint)
+            print("Predicted:", predicted)
+            print("Manual Label:", actual_label)
+
+            print(
+                "Reason: The simple word-based scorer does not "
+                "understand full sentence meaning, context, or "
+                "complex negation."
+            )
+
+            break
+
+
+# =====================================================
+# B4.2: DATABASE AND INDEX PERFORMANCE
+# =====================================================
+
+def database_test():
+
+    print("\nDATABASE INDEX PERFORMANCE")
+    print("=" * 55)
+
+    connection = sqlite3.connect(":memory:")
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        CREATE TABLE readings (
+            id INTEGER PRIMARY KEY,
+            station TEXT,
+            day TEXT,
+            time TEXT,
+            air_quality REAL
+        )
+    """)
+
+    # Generate readings for 100 stations.
+    # Each station reports every 15 minutes.
+    stations = 100
+    days = 30
+    readings_per_day = 96
+
+    data = []
+
+    for station_no in range(1, stations + 1):
+
+        station_name = f"ST{station_no:03}"
+
+        for day_no in range(1, days + 1):
+
+            day = f"2026-11-{day_no:02}"
+
+            for reading_no in range(readings_per_day):
+
+                hour = reading_no // 4
+                minute = (reading_no % 4) * 15
+
+                time_value = f"{hour:02}:{minute:02}"
+
+                air_quality = random.uniform(20, 200)
+
+                data.append((
+                    station_name,
+                    day,
+                    time_value,
+                    round(air_quality, 2)
+                ))
+
+    cursor.executemany("""
+        INSERT INTO readings
+        (station, day, time, air_quality)
+        VALUES (?, ?, ?, ?)
+    """, data)
+
+    connection.commit()
+
+    print("Total stations:", stations)
+    print("Total days:", days)
+    print("Readings per day:", readings_per_day)
+    print("Total database records:", len(data))
+
+    query = """
+        SELECT AVG(air_quality)
+        FROM readings
+        WHERE station = ? AND day = ?
+    """
+
+    parameters = ("ST050", "2026-11-15")
+
+    # Measure query before indexing
+    start = time.perf_counter()
+
+    for _ in range(100):
+        cursor.execute(query, parameters)
+        cursor.fetchone()
+
+    before_index = time.perf_counter() - start
+
+    print("\nQuery time before index:",
+          round(before_index, 6), "seconds")
+
+    # Create composite index
+    cursor.execute("""
+        CREATE INDEX idx_station_day
+        ON readings(station, day)
+    """)
+
+    connection.commit()
+
+    # Measure query after indexing
+    start = time.perf_counter()
+
+    for _ in range(100):
+        cursor.execute(query, parameters)
+        cursor.fetchone()
+
+    after_index = time.perf_counter() - start
+
+    print("Query time after index:",
+          round(after_index, 6), "seconds")
+
+    if after_index > 0:
+
+        improvement = before_index / after_index
+
+        print("Index performance ratio:",
+              round(improvement, 2), "times")
+
+    if before_index > after_index:
+        print("Result: Index improved query performance.")
+
+    else:
+        print(
+            "Result: No measurable improvement in this test. "
+            "Small timing differences can occur."
+        )
+
+    connection.close()
+
+
+# =====================================================
+# B4.3: FINAL ENGINEERING DECISION
+# =====================================================
+
+def production_decision():
+
+    print("\nFINAL ENGINEERING DECISION")
+    print("=" * 55)
+
+    print("1. Store readings and complaints in an SQLite or")
+    print("   production relational database.")
+
+    print("2. Use a composite index on (station, day) for")
+    print("   faster station and date-based searches.")
+
+    print("3. Validate and clean incoming data before storage.")
+
+    print("4. Process sensor readings in batches and maintain")
+    print("   regular backups.")
+
+    print("5. Use the simple sentiment scorer as an initial")
+    print("   screening method, not as the final decision-maker.")
+
+    print("6. Use a trained NLP model when complaint volume,")
+    print("   language variation, sarcasm and context require")
+    print("   more accurate classification.")
+
+    print("7. Keep human review for important or uncertain")
+    print("   complaints.")
+
+    print("\nSCALABILITY CALCULATION")
+
+    total_stations = 100
+    readings_per_hour = 4
+    hours_per_day = 24
+    days_per_month = 30
+
+    monthly_readings = (
+        total_stations
+        * readings_per_hour
+        * hours_per_day
+        * days_per_month
+    )
+
+    monthly_complaints = 50000
+
+    print("Monthly sensor readings:", monthly_readings)
+    print("Monthly complaints:", monthly_complaints)
+    print("Total monthly records:",
+          monthly_readings + monthly_complaints)
+
+    print("\nDecision: Use indexed database storage,")
+    print("automated cleaning, batch analysis and a")
+    print("trained NLP model for advanced complaint analysis.")
+
+
+# =====================================================
+# MAIN PROGRAM
+# =====================================================
+
+if __name__ == "__main__":
+
+    random.seed(42)
+
+    test_sentiment()
+
+    test_summariser()
+
+    find_wrong_classification()
+
+    database_test()
+
+    production_decision()
