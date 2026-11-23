@@ -1,1 +1,125 @@
+import time
+import random
 
+
+# Q7: Diagnose, Redesign and Validate
+# Selected Program: Counting the Frequency of Elements in a List
+
+
+# ORIGINAL PROGRAM
+# Uses nested loops to count each element repeatedly.
+def original_frequency(numbers):
+    frequency = []
+
+    for i in range(len(numbers)):
+        count = 0
+
+        for j in range(len(numbers)):
+            if numbers[i] == numbers[j]:
+                count += 1
+
+        # Avoid storing duplicate frequency entries
+        already_exists = False
+
+        for item in frequency:
+            if item[0] == numbers[i]:
+                already_exists = True
+                break
+
+        if not already_exists:
+            frequency.append((numbers[i], count))
+
+    return frequency
+
+
+# REDESIGNED PROGRAM
+# Uses a dictionary to count each element in one pass.
+def redesigned_frequency(numbers):
+    frequency = {}
+
+    for value in numbers:
+        if value in frequency:
+            frequency[value] += 1
+        else:
+            frequency[value] = 1
+
+    return list(frequency.items())
+
+
+# FUNCTION TO MEASURE EXECUTION TIME
+def measure_time(function, data):
+    start = time.perf_counter()
+    result = function(data)
+    end = time.perf_counter()
+
+    return result, end - start
+
+
+# GENERATE TEST DATA
+def generate_data(size):
+    random.seed(42)
+    return [random.randint(1, 100) for _ in range(size)]
+
+
+# VALIDATE BOTH PROGRAMS
+def validate_program(size):
+    data = generate_data(size)
+
+    original_result, original_time = measure_time(
+        original_frequency, data
+    )
+
+    redesigned_result, redesigned_time = measure_time(
+        redesigned_frequency, data
+    )
+
+    # Compare the results
+    original_result = sorted(original_result)
+    redesigned_result = sorted(redesigned_result)
+
+    print("\nInput Size:", size)
+    print("Original Result:", original_result)
+    print("Redesigned Result:", redesigned_result)
+
+    if original_result == redesigned_result:
+        print("Validation: PASSED")
+    else:
+        print("Validation: FAILED")
+
+    print("Original Execution Time:",
+          round(original_time, 6), "seconds")
+
+    print("Redesigned Execution Time:",
+          round(redesigned_time, 6), "seconds")
+
+    if redesigned_time > 0:
+        improvement = original_time / redesigned_time
+        print("Performance Improvement:",
+              round(improvement, 2), "times")
+
+    print("-" * 60)
+
+
+# MAIN PROGRAM
+print("FREQUENCY COUNTING - ORIGINAL VS REDESIGNED")
+print("=" * 60)
+
+test_sizes = [100, 500, 1000, 2000]
+
+for size in test_sizes:
+    validate_program(size)
+
+
+# FINAL DESIGN COMPARISON
+print("\nDESIGN ANALYSIS")
+print("Original Time Complexity: O(n^2)")
+print("Redesigned Average Time Complexity: O(n)")
+print("Original Extra Space: O(k)")
+print("Redesigned Extra Space: O(k)")
+print("n = Number of elements")
+print("k = Number of distinct elements")
+
+print("\nConclusion:")
+print("The redesigned program counts each element in a single pass.")
+print("It avoids repeated comparisons and reduces execution time")
+print("for larger inputs, at the cost of using a dictionary.")
