@@ -1,1 +1,478 @@
+import os
+from pathlib import Path
+from collections import defaultdict
 
+# ==========================================
+# COLLEGE FEST REGISTRATION MANAGEMENT SYSTEM
+# ==========================================
+
+INPUT_FOLDER = Path("department_files")
+OUTPUT_FOLDER = Path("fest_output")
+
+DEPARTMENTS = [
+    "CSE",
+    "ECE",
+    "EEE",
+    "MECH",
+    "CIVIL"
+]
+
+# ==========================================
+# MODULE 1: CREATE SAMPLE INPUT FILES
+# ==========================================
+
+def create_sample_files():
+
+    INPUT_FOLDER.mkdir(exist_ok=True)
+
+    sample_data = {
+        "CSE.txt": [
+            "101|Arun Kumar|CSE|arun@gmail.com|Dance;Singing",
+            "102|Priya|CSE|priya@gmail.com|Drama;Dance",
+            "103|Karthik|CSE|invalid-email|Music"
+        ],
+
+        "ECE.txt": [
+            "104|Rahul|ECE|rahul@gmail.com|Singing;Quiz",
+            "101|Arun Kumar|ECE|arun@gmail.com|Dance",
+            "105|Divya|ECE|divya@gmail.com|Photography"
+        ],
+
+        "EEE.txt": [
+            "106|Sneha|EEE|sneha@gmail.com|Drama;Quiz",
+            "107|Vijay|EEE|vijay@gmail.com|Dance"
+        ],
+
+        "MECH.txt": [
+            "108|Ajay|MECH|ajay@gmail.com|Singing",
+            "109|Meena|MECH|meena@gmail.com|Drama",
+            "DAMAGED LINE"
+        ]
+
+        # CIVIL.txt is intentionally not created
+        # to demonstrate missing-file handling.
+    }
+
+    for filename, records in sample_data.items():
+
+        file_path = INPUT_FOLDER / filename
+
+        with open(file_path, "w", encoding="utf-8") as file:
+            for record in records:
+                file.write(record + "\n")
+
+
+# ==========================================
+# MODULE 2: EMAIL VALIDATION
+# ==========================================
+
+def validate_email(email):
+
+    email = email.strip()
+
+    if not email:
+        return False
+
+    if " " in email:
+        return False
+
+    if email.count("@") != 1:
+        return False
+
+    username, domain = email.split("@")
+
+    if not username or not domain:
+        return False
+
+    if "." not in domain:
+        return False
+
+    if domain.startswith(".") or domain.endswith("."):
+        return False
+
+    if domain.startswith("@") or domain.endswith("@"):
+        return False
+
+    return True
+
+
+# ==========================================
+# MODULE 3: VALIDATE REGISTRATION RECORD
+# ==========================================
+
+def validate_record(line):
+
+    fields = line.strip().split("|")
+
+    if len(fields) != 5:
+        raise ValueError("Incorrect number of fields")
+
+    reg_no, name, department, email, events = fields
+
+    reg_no = reg_no.strip()
+    name = name.strip()
+    department = department.strip().upper()
+    email = email.strip().lower()
+
+    if not reg_no.isdigit():
+        raise ValueError("Invalid register number")
+
+    if not name:
+        raise ValueError("Student name is missing")
+
+    if not department:
+        raise ValueError("Department is missing")
+
+    if not validate_email(email):
+        raise ValueError("Invalid email address")
+
+    event_list = [
+        event.strip().title()
+        for event in events.split(";")
+        if event.strip()
+    ]
+
+    if not event_list:
+        raise ValueError("No events selected")
+
+    return {
+        "reg_no": reg_no,
+        "name": name,
+        "department": department,
+        "email": email,
+        "events": event_list
+    }
+
+
+# ==========================================
+# MODULE 4: READ AND PROCESS FILES
+# ==========================================
+
+def read_department_files():
+
+    master_list = []
+    seen_register_numbers = set()
+    error_log = []
+    event_participants = defaultdict(list)
+
+    total_records = 0
+    duplicate_count = 0
+    invalid_count = 0
+
+    for department in DEPARTMENTS:
+
+        filename = INPUT_FOLDER / f"{department}.txt"
+
+        try:
+
+            with open(filename, "r", encoding="utf-8") as file:
+
+                for line_number, line in enumerate(file, start=1):
+
+                    total_records += 1
+
+                    try:
+
+                        student = validate_record(line)
+
+                        # Check department consistency
+                        if student["department"] != department:
+                            raise ValueError(
+                                "Department does not match input file"
+                            )
+
+                        reg_no = student["reg_no"]
+
+                        # Detect duplicate registrations
+                        if reg_no in seen_register_numbers:
+
+                            duplicate_count += 1
+
+                            error_log.append(
+                                f"{filename.name}, Line {line_number}: "
+                                f"Duplicate registration {reg_no}"
+                            )
+
+                            continue
+
+                        seen_register_numbers.add(reg_no)
+
+                        master_list.append(student)
+
+                        # Add student to selected event lists
+                        for event in student["events"]:
+                            event_participants[event].append(student)
+
+                    except ValueError as error:
+
+                        invalid_count += 1
+
+                        error_log.append(
+                            f"{filename.name}, Line {line_number}: {error}"
+                        )
+
+        except FileNotFoundError:
+
+            error_log.append(
+                f"{filename.name}: Department file is missing"
+            )
+
+        except PermissionError:
+
+            error_log.append(
+                f"{filename.name}: Permission denied"
+            )
+
+        except UnicodeDecodeError:
+
+            error_log.append(
+                f"{filename.name}: File encoding error"
+            )
+
+        except OSError as error:
+
+            error_log.append(
+                f"{filename.name}: File error - {error}"
+            )
+
+    return (
+        master_list,
+        event_participants,
+        error_log,
+        total_records,
+        duplicate_count,
+        invalid_count
+    )
+
+
+# ==========================================
+# MODULE 5: WRITE MASTER LIST
+# ==========================================
+
+def write_master_list(master_list):
+
+    OUTPUT_FOLDER.mkdir(exist_ok=True)
+
+    filename = OUTPUT_FOLDER / "master_list.txt"
+
+    with open(filename, "w", encoding="utf-8") as file:
+
+        file.write("COLLEGE FEST MASTER REGISTRATION LIST\n")
+        file.write("=" * 55 + "\n\n")
+
+        for student in master_list:
+
+            file.write(
+                f"Register Number: {student['reg_no']}\n"
+            )
+
+            file.write(f"Name: {student['name']}\n")
+            file.write(f"Department: {student['department']}\n")
+            file.write(f"Email: {student['email']}\n")
+
+            file.write(
+                f"Events: {', '.join(student['events'])}\n"
+            )
+
+            file.write("-" * 55 + "\n")
+
+
+# ==========================================
+# MODULE 6: WRITE EVENT-WISE PARTICIPANT FILES
+# ==========================================
+
+def write_event_files(event_participants):
+
+    event_folder = OUTPUT_FOLDER / "events"
+    event_folder.mkdir(parents=True, exist_ok=True)
+
+    for event, students in event_participants.items():
+
+        filename = event_folder / f"{event.lower()}.txt"
+
+        with open(filename, "w", encoding="utf-8") as file:
+
+            file.write(f"{event.upper()} PARTICIPANT LIST\n")
+            file.write("=" * 40 + "\n")
+
+            for student in students:
+
+                file.write(
+                    f"{student['reg_no']} - "
+                    f"{student['name']} - "
+                    f"{student['department']} - "
+                    f"{student['email']}\n"
+                )
+
+
+# ==========================================
+# MODULE 7: WRITE SUMMARY REPORT
+# ==========================================
+
+def write_summary(
+    master_list,
+    event_participants,
+    total_records,
+    duplicate_count,
+    invalid_count
+):
+
+    filename = OUTPUT_FOLDER / "summary_report.txt"
+
+    department_count = defaultdict(int)
+
+    for student in master_list:
+        department_count[student["department"]] += 1
+
+    with open(filename, "w", encoding="utf-8") as file:
+
+        file.write("COLLEGE FEST SUMMARY REPORT\n")
+        file.write("=" * 45 + "\n\n")
+
+        file.write(f"Total records read: {total_records}\n")
+        file.write(f"Valid registrations: {len(master_list)}\n")
+        file.write(f"Duplicate registrations: {duplicate_count}\n")
+        file.write(f"Invalid records: {invalid_count}\n")
+
+        file.write("\nDEPARTMENT-WISE REGISTRATIONS\n")
+
+        for department in DEPARTMENTS:
+
+            file.write(
+                f"{department}: {department_count[department]}\n"
+            )
+
+        file.write("\nEVENT-WISE PARTICIPANTS\n")
+
+        for event, students in sorted(event_participants.items()):
+
+            file.write(
+                f"{event}: {len(students)} participants\n"
+            )
+
+
+# ==========================================
+# MODULE 8: WRITE ERROR LOG
+# ==========================================
+
+def write_error_log(error_log):
+
+    filename = OUTPUT_FOLDER / "error_log.txt"
+
+    with open(filename, "w", encoding="utf-8") as file:
+
+        file.write("COLLEGE FEST ERROR LOG\n")
+        file.write("=" * 45 + "\n\n")
+
+        if not error_log:
+            file.write("No errors found.\n")
+
+        else:
+
+            for error in error_log:
+                file.write(error + "\n")
+
+
+# ==========================================
+# MODULE 9: DISPLAY FINAL RESULTS
+# ==========================================
+
+def display_results(
+    master_list,
+    event_participants,
+    error_log,
+    total_records,
+    duplicate_count,
+    invalid_count
+):
+
+    print("\nCOLLEGE FEST REGISTRATION REPORT")
+    print("=" * 45)
+
+    print("Total records read:", total_records)
+    print("Valid registrations:", len(master_list))
+    print("Duplicate registrations:", duplicate_count)
+    print("Invalid records:", invalid_count)
+
+    print("\nMASTER STUDENT LIST")
+
+    for student in master_list:
+
+        print(
+            student["reg_no"],
+            student["name"],
+            student["department"],
+            student["email"],
+            student["events"]
+        )
+
+    print("\nEVENT-WISE PARTICIPANTS")
+
+    for event, students in sorted(event_participants.items()):
+
+        print(f"\n{event}: {len(students)} participants")
+
+        for student in students:
+            print(student["reg_no"], "-", student["name"])
+
+    print("\nERROR LOG")
+
+    for error in error_log:
+        print(error)
+
+    print("\nOutput files saved in:", OUTPUT_FOLDER)
+
+
+# ==========================================
+# MODULE 10: MAIN PROGRAM
+# ==========================================
+
+def main():
+
+    create_sample_files()
+
+    (
+        master_list,
+        event_participants,
+        error_log,
+        total_records,
+        duplicate_count,
+        invalid_count
+    ) = read_department_files()
+
+    try:
+
+        write_master_list(master_list)
+
+        write_event_files(event_participants)
+
+        write_summary(
+            master_list,
+            event_participants,
+            total_records,
+            duplicate_count,
+            invalid_count
+        )
+
+        write_error_log(error_log)
+
+    except OSError as error:
+
+        print("Output file error:", error)
+
+    display_results(
+        master_list,
+        event_participants,
+        error_log,
+        total_records,
+        duplicate_count,
+        invalid_count
+    )
+
+
+# ==========================================
+# EXECUTION
+# ==========================================
+
+if __name__ == "__main__":
+    main()
