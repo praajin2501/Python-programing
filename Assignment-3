@@ -1,1 +1,412 @@
+import time
+import random
+import string
 
+
+# Q7: CONTACT MERGING PROGRAM
+# Merge duplicate contacts using normalised phone numbers and email addresses.
+
+
+# --------------------------------------------------
+# 1. NORMALISATION FUNCTIONS
+# --------------------------------------------------
+
+def normalize_phone(phone):
+    if not phone:
+        return ""
+
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+
+    # Convert Indian numbers into a common 10-digit format
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+
+    return digits
+
+
+def normalize_email(email):
+    if not email:
+        return ""
+
+    return email.strip().lower()
+
+
+def normalize_name(name):
+    if not name:
+        return ""
+
+    return " ".join(name.strip().lower().split())
+
+
+# --------------------------------------------------
+# 2. CONTACT MERGING USING A DICTIONARY
+# --------------------------------------------------
+
+def merge_contacts(contacts):
+
+    merged = []
+
+    phone_index = {}
+    email_index = {}
+
+    for contact in contacts:
+
+        name = contact.get("name", "").strip()
+        phone = normalize_phone(contact.get("phone", ""))
+        email = normalize_email(contact.get("email", ""))
+
+        # Find existing groups using phone or email
+        matching_groups = set()
+
+        if phone and phone in phone_index:
+            matching_groups.add(phone_index[phone])
+
+        if email and email in email_index:
+            matching_groups.add(email_index[email])
+
+        if not matching_groups:
+
+            # Create a new contact group
+            group = {
+                "names": set(),
+                "numbers": set(),
+                "emails": set()
+            }
+
+            merged.append(group)
+
+        else:
+
+            # Use the first matching group
+            group = matching_groups.pop()
+
+            # Merge any other matching groups
+            for other_group in matching_groups:
+
+                group["names"].update(other_group["names"])
+                group["numbers"].update(other_group["numbers"])
+                group["emails"].update(other_group["emails"])
+
+                merged.remove(other_group)
+
+                # Update indexes pointing to the merged group
+                for number in other_group["numbers"]:
+                    phone_index[number] = group
+
+                for mail in other_group["emails"]:
+                    email_index[mail] = group
+
+        # Add the current contact details
+        if name:
+            group["names"].add(name)
+
+        if phone:
+            group["numbers"].add(phone)
+            phone_index[phone] = group
+
+        if email:
+            group["emails"].add(email)
+            email_index[email] = group
+
+    # Prepare readable output
+    result = []
+
+    for group in merged:
+
+        result.append({
+            "names": sorted(group["names"]),
+            "phone_numbers": sorted(group["numbers"]),
+            "emails": sorted(group["emails"])
+        })
+
+    return result
+
+
+# --------------------------------------------------
+# 3. ORIGINAL METHOD: COMPARING EVERY PAIR
+# --------------------------------------------------
+
+def pairwise_merge(contacts):
+
+    groups = []
+
+    for contact in contacts:
+
+        name = contact.get("name", "").strip()
+        phone = normalize_phone(contact.get("phone", ""))
+        email = normalize_email(contact.get("email", ""))
+
+        matching_groups = []
+
+        for group in groups:
+
+            same_phone = (
+                phone and phone in group["numbers"]
+            )
+
+            same_email = (
+                email and email in group["emails"]
+            )
+
+            if same_phone or same_email:
+                matching_groups.append(group)
+
+        if not matching_groups:
+
+            group = {
+                "names": set(),
+                "numbers": set(),
+                "emails": set()
+            }
+
+            groups.append(group)
+
+        else:
+
+            group = matching_groups[0]
+
+            for other_group in matching_groups[1:]:
+
+                group["names"].update(other_group["names"])
+                group["numbers"].update(other_group["numbers"])
+                group["emails"].update(other_group["emails"])
+
+                groups.remove(other_group)
+
+        if name:
+            group["names"].add(name)
+
+        if phone:
+            group["numbers"].add(phone)
+
+        if email:
+            group["emails"].add(email)
+
+    return groups
+
+
+# --------------------------------------------------
+# 4. SAMPLE CONTACTS FOR TESTING
+# --------------------------------------------------
+
+contacts = [
+    {
+        "name": "Dr. Ravi",
+        "phone": "+91 98400 12345",
+        "email": "Ravi@gmail.com"
+    },
+    {
+        "name": "ravi kumar",
+        "phone": "9840012345",
+        "email": "ravi@gmail.com"
+    },
+    {
+        "name": "Priya",
+        "phone": "98765 43210",
+        "email": "priya@gmail.com"
+    },
+    {
+        "name": "Priya",
+        "phone": "9876543211",
+        "email": "priya.work@gmail.com"
+    },
+    {
+        "name": "Arun",
+        "phone": "",
+        "email": "arun@gmail.com"
+    },
+    {
+        "name": "Arun Kumar",
+        "phone": None,
+        "email": "ARUN@gmail.com"
+    },
+    {
+        "name": "Karthik",
+        "phone": "9000011111",
+        "email": ""
+    },
+    {
+        "name": "Karthik",
+        "phone": "90000-11111",
+        "email": ""
+    },
+    {
+        "name": "",
+        "phone": "9123456789",
+        "email": ""
+    }
+]
+
+
+# --------------------------------------------------
+# 5. DISPLAY MERGED CONTACTS
+# --------------------------------------------------
+
+print("CONTACT MERGING PROGRAM")
+print("=" * 50)
+
+merged_contacts = merge_contacts(contacts)
+
+for index, contact in enumerate(merged_contacts, start=1):
+
+    print("\nContact", index)
+    print("Names:", contact["names"])
+    print("Phone Numbers:", contact["phone_numbers"])
+    print("Emails:", contact["emails"])
+
+
+# --------------------------------------------------
+# 6. VERIFY RESULT WITH A SMALL LIST
+# --------------------------------------------------
+
+print("\nSMALL LIST VALIDATION")
+print("=" * 50)
+
+print("Original number of contacts:", len(contacts))
+print("Number of merged contacts:", len(merged_contacts))
+
+# Ravi's two entries should be merged
+ravi_found = any(
+    "9840012345" in contact["phone_numbers"]
+    and "Ravi@gmail.com".lower() in contact["emails"]
+    for contact in merged_contacts
+)
+
+# Two Priya contacts with different numbers should remain separate
+priya_count = sum(
+    any(normalize_name(name) == "priya" for name in contact["names"])
+    for contact in merged_contacts
+)
+
+print("Ravi duplicate merged:", ravi_found)
+print("Different Priya numbers kept separate:", priya_count == 2)
+
+
+# --------------------------------------------------
+# 7. GENERATE LARGE TEST DATA
+# --------------------------------------------------
+
+def generate_contacts(size):
+
+    random.seed(42)
+
+    data = []
+
+    for i in range(size):
+
+        person_id = i // 2
+
+        phone = "98400" + str(10000 + person_id)
+        email = "person" + str(person_id) + "@gmail.com"
+
+        if i % 2 == 0:
+            data.append({
+                "name": "Person " + str(person_id),
+                "phone": "+91 " + phone,
+                "email": email
+            })
+
+        else:
+            data.append({
+                "name": "person " + str(person_id),
+                "phone": phone,
+                "email": email.upper()
+            })
+
+    return data
+
+
+# --------------------------------------------------
+# 8. PERFORMANCE MEASUREMENT
+# --------------------------------------------------
+
+def measure_time(function, data):
+
+    start = time.perf_counter()
+
+    result = function(data)
+
+    end = time.perf_counter()
+
+    return result, end - start
+
+
+print("\nPERFORMANCE MEASUREMENT")
+print("=" * 50)
+
+for size in [1000, 100000]:
+
+    test_data = generate_contacts(size)
+
+    result, dictionary_time = measure_time(
+        merge_contacts, test_data
+    )
+
+    print("\nInput Contacts:", size)
+    print("Merged Contacts:", len(result))
+    print(
+        "Dictionary Method Time:",
+        round(dictionary_time, 6),
+        "seconds"
+    )
+
+    print("Estimated Pairwise Comparisons:",
+          size * (size - 1) // 2)
+
+    # Pairwise method is measured on 1,000 contacts only.
+    # 100,000 contacts would require billions of comparisons.
+    if size == 1000:
+
+        pairwise_result, pairwise_time = measure_time(
+            pairwise_merge, test_data
+        )
+
+        print(
+            "Pairwise Method Time:",
+            round(pairwise_time, 6),
+            "seconds"
+        )
+
+        print(
+            "Pairwise Result Count:",
+            len(pairwise_result)
+        )
+
+    else:
+
+        print(
+            "Pairwise Method Time: Not executed "
+            "(too many comparisons)"
+        )
+
+
+# --------------------------------------------------
+# 9. COMPLEXITY ANALYSIS
+# --------------------------------------------------
+
+print("\nCOMPLEXITY ANALYSIS")
+print("=" * 50)
+
+print("Dictionary Method:")
+print("Average Time Complexity: O(n)")
+print("Space Complexity: O(n)")
+
+print("\nPairwise Method:")
+print("Time Complexity: O(n^2)")
+print("Space Complexity: O(n)")
+
+print("\nFor 1,000 contacts:")
+print("Maximum pair comparisons:", 1000 * 999 // 2)
+
+print("\nFor 100,000 contacts:")
+print("Maximum pair comparisons:",
+      100000 * 99999 // 2)
+
+print("\nFINAL CONCLUSION")
+print("The dictionary method uses normalised phone numbers")
+print("and email addresses to identify duplicate contacts.")
+print("It avoids comparing every contact with all other contacts.")
+print("Contacts with the same name but different numbers")
+print("remain separate unless they share another identifier.")
+print("A limitation is that shared or recycled phone numbers")
+print("may cause two different people to be merged.")
