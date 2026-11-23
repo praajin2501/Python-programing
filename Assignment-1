@@ -1,1 +1,139 @@
+from decimal import Decimal, ROUND_FLOOR
 
+# Constants
+FAT_STEP_SIZE = Decimal("0.10")
+FAT_REFERENCE = Decimal("3.00")
+SEASONAL_BASE_RATE = Decimal("32.00")
+SEASONAL_FAT_STEP_RATE = Decimal("0.45")
+BONUS_RATE = Decimal("0.50")
+BONUS_LIMIT = Decimal("500.00")
+
+
+# Function to select the rate card
+def select_rate_card(month, original_base_rate, original_fat_step_rate):
+    if 4 <= month <= 6:
+        return SEASONAL_BASE_RATE, SEASONAL_FAT_STEP_RATE
+    else:
+        return Decimal(str(original_base_rate)), Decimal(str(original_fat_step_rate))
+
+
+# Function to calculate fat steps
+def calculate_fat_steps(fat):
+    difference = Decimal(str(fat)) - FAT_REFERENCE
+
+    if difference <= 0:
+        return 0
+
+    return int(
+        (difference / FAT_STEP_SIZE).to_integral_value(rounding=ROUND_FLOOR)
+    )
+
+
+# Function to calculate milk price per litre
+def calculate_milk_rate(fat, month, original_base_rate,
+                        original_fat_step_rate):
+    base_rate, fat_step_rate = select_rate_card(
+        month, original_base_rate, original_fat_step_rate
+    )
+
+    fat_steps = calculate_fat_steps(fat)
+
+    milk_rate = base_rate + (fat_steps * fat_step_rate)
+
+    return milk_rate.quantize(Decimal("0.01"))
+
+
+# Function to calculate bonus
+def calculate_bonus(total_litres):
+    if Decimal(str(total_litres)) > BONUS_LIMIT:
+        return BONUS_RATE
+    return Decimal("0.00")
+
+
+# Function to calculate final payment
+def calculate_payment(fat, snf, total_litres, month,
+                      original_base_rate, original_fat_step_rate):
+
+    milk_rate = calculate_milk_rate(
+        fat, month, original_base_rate, original_fat_step_rate
+    )
+
+    bonus = calculate_bonus(total_litres)
+
+    final_rate = milk_rate + bonus
+    total_payment = final_rate * Decimal(str(total_litres))
+
+    return (
+        milk_rate,
+        bonus,
+        final_rate.quantize(Decimal("0.01")),
+        total_payment.quantize(Decimal("0.01"))
+    )
+
+
+# Main program
+print("MILK PAYMENT CALCULATOR")
+
+original_base_rate = Decimal(
+    input("Enter original base rate for other months (Rs): ")
+)
+
+original_fat_step_rate = Decimal(
+    input("Enter original fat step rate for other months (Rs): ")
+)
+
+fat = Decimal(input("Enter fat value: ")).quantize(Decimal("0.01"))
+snf = Decimal(input("Enter SNF value: ")).quantize(Decimal("0.01"))
+total_litres = Decimal(input("Enter total litres supplied in 10 days: "))
+month = int(input("Enter month number (1-12): "))
+
+if not (1 <= month <= 12):
+    print("Invalid month.")
+elif fat < 0 or snf < 0 or total_litres < 0:
+    print("Invalid input. Values cannot be negative.")
+else:
+    milk_rate, bonus, final_rate, total_payment = calculate_payment(
+        fat,
+        snf,
+        total_litres,
+        month,
+        original_base_rate,
+        original_fat_step_rate
+    )
+
+    print("\n----- MILK PAYMENT DETAILS -----")
+    print("Fat:", fat)
+    print("SNF:", snf)
+    print("Total Litres:", total_litres)
+    print("Milk Rate per Litre: Rs.", milk_rate)
+    print("Bonus per Litre: Rs.", bonus)
+    print("Final Rate per Litre: Rs.", final_rate)
+    print("Total Payment: Rs.", total_payment)
+
+
+# Test cases for both seasons and bonus
+print("\n----- TEST CASES -----")
+
+test_cases = [
+    (Decimal("4.25"), Decimal("8.50"), Decimal("450"), 5),
+    (Decimal("4.25"), Decimal("8.50"), Decimal("550"), 5),
+    (Decimal("4.25"), Decimal("8.50"), Decimal("550"), 7)
+]
+
+for fat, snf, litres, month in test_cases:
+    milk_rate, bonus, final_rate, payment = calculate_payment(
+        fat,
+        snf,
+        litres,
+        month,
+        original_base_rate,
+        original_fat_step_rate
+    )
+
+    print("\nMonth:", month)
+    print("Fat:", fat, "| SNF:", snf)
+    print("Litres:", litres)
+    print("Milk Rate: Rs.", milk_rate)
+    print("Bonus: Rs.", bonus)
+    print("Final Rate: Rs.", final_rate)
+    print("Total Payment: Rs.", payment)
